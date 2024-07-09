@@ -1,0 +1,85 @@
+// SPDX-License-Identifier: GPL-3.0
+
+pragma solidity >=0.7.0 <0.9.0;
+
+contract Auction {
+    address payable public auctioneer;
+    uint public startblock;
+    uint public endblock;
+    uint public productIdCounter = 1; // Counter for generating product IDs
+
+    struct Product {
+        string name;
+        uint256 id;
+        uint highestBid;
+        address payable highestBidder;
+        bool active;
+        uint numberOfBids;
+    
+    }
+
+    Product[] public products;
+    mapping(uint => mapping(address => uint)) public bids; // Mapping to store bids for each product
+
+    constructor() {
+        auctioneer = payable(msg.sender);
+        startblock = block.number;
+        endblock = startblock + 240;
+    }
+
+    modifier notOwner() {
+        require(msg.sender != auctioneer, "Owner cannot bid");
+        _;
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == auctioneer, "Only owner can perform this action");
+        _;
+    }
+
+    modifier started() {
+        require(block.number > startblock, "Auction not started yet");
+        _;
+    }
+
+    modifier beforeending() {
+        require(block.number < endblock, "Auction already ended");
+        _;
+    }
+
+    modifier bidState(uint productId) {
+        require(products[productId].active == true, "Auction is over for this product");
+        _;
+    }
+
+    function addProduct(string memory Product_name) public onlyOwner {
+        uint id = productIdCounter++; //  product ID increment 
+        require(id <= 999, "Product ID exceeded maximum limit"); 
+        products.push(Product(Product_name, id, 0, payable(address(0)), true, 0));
+    }
+
+    function cancelAuc(uint productId) public onlyOwner {
+        products[productId].active = false;
+    }
+
+    function bid(uint productId) payable public notOwner started beforeending bidState(productId) { 
+        require(msg.value >= 1 ether, "Minimum bid is 1 ether");
+
+        uint currentBid = msg.value;
+        Product storage product = products[productId];
+
+        require(currentBid > product.highestBid, "There already is a higher or equal bid");
+
+        if (currentBid > bids[productId][product.highestBidder]) {
+            product.highestBid = currentBid;
+            bids[productId][msg.sender] = currentBid;
+            product.highestBidder = payable(msg.sender);
+            product.numberOfBids++;
+        }
+    }
+
+    function BidWinner(uint productId) public view returns (address, uint) {
+        Product storage product = products[productId];
+        return (product.highestBidder, product.highestBid);
+    }
+}
